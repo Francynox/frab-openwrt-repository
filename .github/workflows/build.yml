@@ -1,0 +1,59 @@
+name: Build APK
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [x86_64]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build Package
+        uses: openwrt/gh-action-sdk@main
+        env:
+          ARCH: ${{ matrix.arch }}
+          PACKAGES: luci-app-firewall-hybrid
+          INDEX: 1
+          PRIVATE_KEY: ${{ secrets.APK_PRIVATE_KEY }}
+
+      - name: Prepare Deployment Directory
+        run: |
+          mkdir -p public/packages/${{ matrix.arch }}
+          cp -r bin/packages/${{ matrix.arch }}/action/* public/packages/${{ matrix.arch }}/
+          cp frab_openwrt.pub public/
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.arch }}-repository
+          path: public/
+
+  deploy:
+    needs: build
+    if: github.event_name == 'push' && github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: public
+          pattern: '*-repository'
+          merge-multiple: true
+
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: public/
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

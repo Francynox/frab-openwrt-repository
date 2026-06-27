@@ -1,0 +1,66 @@
+{
+	"admin/network/firewall/hybrid-forwards": {
+		"title": "Port Forwards (Hybrid)",
+		"order": 60,
+		"action": {
+			"type": "view",
+			"path": "firewall/hybrid-forwards"
+		},
+		"depends": {
+			"acl": [
+				"luci-app-firewall-hybrid"
+			],
+			"uci": {
+				"firewall": true
+			}
+		}
+	},
+	"admin/network/firewall/hybrid": {
+		"title": "Traffic Rules (Hybrid)",
+		"order": 70,
+		"action": {
+			"type": "view",
+			"path": "firewall/hybrid-rules"
+		},
+		"depends": {
+			"acl": [
+				"luci-app-firewall-hybrid"
+			],
+			"uci": {
+				"firewall": true
+			}
+		}
+	},
+	"admin/network/firewall/hybrid-snats": {
+		"title": "NAT Rules (Hybrid)",
+		"order": 80,
+		"action": {
+			"type": "view",
+			"path": "firewall/hybrid-snats"
+		},
+		"depends": {
+			"acl": [
+				"luci-app-firewall-hybrid"
+			],
+			"uci": {
+				"firewall": true
+			}
+		}
+	},
+	"admin/network/firewall/hybrid-ipsets": {
+		"title": "IP Sets (Hybrid)",
+		"order": 90,
+		"action": {
+			"type": "view",
+			"path": "firewall/hybrid-ipsets"
+		},
+		"depends": {
+			"acl": [
+				"luci-app-firewall-hybrid"
+			],
+			"uci": {
+				"firewall": true
+			}
+		}
+	}
+}

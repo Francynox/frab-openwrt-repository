@@ -1,0 +1,15 @@
+{
+	"luci-app-firewall-hybrid": {
+		"description": "Grant access to hybrid firewall view",
+		"read": {
+			"uci": [ "firewall" ],
+			"rpc-objects": [
+				{ "luci": [ "getHosts" ] },
+				{ "network": [ "get_protocol_descriptions" ] }
+			]
+		},
+		"write": {
+			"uci": [ "firewall" ]
+		}
+	}
+}
