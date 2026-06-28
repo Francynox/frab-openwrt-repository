@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        arch: [x86_64]
+        arch: [x86_64-25.12.4]
     steps:
       - uses: actions/checkout@v7
 
@@ -15,14 +15,13 @@ jobs:
         uses: openwrt/gh-action-sdk@main
         env:
           ARCH: ${{ matrix.arch }}
-          PACKAGES: luci-app-firewall-hybrid
           INDEX: 1
           PRIVATE_KEY: ${{ secrets.APK_PRIVATE_KEY }}
 
       - name: Prepare Deployment Directory
         run: |
           mkdir -p public/packages/${{ matrix.arch }}
-          cp -r bin/packages/${{ matrix.arch }}/action/* public/packages/${{ matrix.arch }}/
+          cp -r bin/packages/*/action/* public/packages/${{ matrix.arch }}/
           cp frab_openwrt.pub public/
 
       - name: Upload Artifact
@@ -49,7 +48,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: public
-          pattern: '*-repository'
+          pattern: "*-repository"
           merge-multiple: true
 
       - name: Generate Directory Index
