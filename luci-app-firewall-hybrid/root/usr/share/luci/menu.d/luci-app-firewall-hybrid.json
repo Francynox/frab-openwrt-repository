@@ -15,7 +15,7 @@
 			}
 		}
 	},
-	"admin/network/firewall/hybrid": {
+	"admin/network/firewall/hybrid-rules": {
 		"title": "Traffic Rules (Hybrid)",
 		"order": 70,
 		"action": {
