@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{REPO_NAME}} - Packages</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0b0f19;
+            --bg-secondary: #161b2d;
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --accent: #6366f1;
+            --accent-hover: #4f46e5;
+            --accent-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+            --border: #242b42;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.5;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        header {
+            margin-bottom: 40px;
+            text-align: center;
+        }
+
+        .title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        .search-container {
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 14px 20px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .search-input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+        }
+
+        .filter-container {
+            margin-top: 12px;
+            display: flex;
+            gap: 12px;
+        }
+
+        .filter-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 6px 16px;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            user-select: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            outline: none;
+        }
+
+        .filter-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--accent);
+            color: var(--text-primary);
+        }
+
+        .filter-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+            box-shadow: 0 0 12px rgba(99, 102, 241, 0.3);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th,
+        td {
+            padding: 16px;
+        }
+
+        th {
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid var(--border);
+        }
+
+        tr {
+            border-bottom: 1px solid var(--border);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .file-row {
+            transition: background-color 0.2s;
+        }
+
+        .file-row:hover {
+            background-color: rgba(255, 255, 255, 0.02);
+        }
+
+        .file-name {
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .file-name a {
+            color: var(--text-primary);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .file-name a:hover {
+            color: var(--accent);
+        }
+
+        .icon {
+            font-size: 1.2rem;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border-radius: 4px;
+        }
+
+        .badge-key {
+            background-color: rgba(234, 179, 8, 0.15);
+            color: #facc15;
+        }
+
+        .badge-pkg {
+            background-color: rgba(99, 102, 241, 0.15);
+            color: #818cf8;
+        }
+
+        .badge-meta {
+            background-color: rgba(156, 163, 175, 0.15);
+            color: #9ca3af;
+        }
+
+        .file-size {
+            color: var(--text-secondary);
+            font-family: monospace;
+        }
+
+        .btn-download {
+            display: inline-block;
+            padding: 8px 16px;
+            background: var(--accent);
+            color: #fff;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+
+        .btn-download:hover {
+            background: var(--accent-hover);
+        }
+
+        .btn-download:active {
+            transform: scale(0.97);
+        }
+
+        .empty-state {
+            display: none;
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 60px;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div class="title">{{REPO_NAME}}</div>
+            <div class="subtitle">Package repository for OpenWrt &amp; APK packages</div>
+        </header>
+
+        <div class="card">
+            <div class="search-container">
+                <input type="text" id="search" class="search-input"
+                    placeholder="Search packages, architectures, public keys...">
+                <div class="filter-container">
+                    <button type="button" id="filter-pkgs" class="filter-btn">
+                        <span>📦</span> Show packages only
+                    </button>
+                </div>
+            </div>
+
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>File Path</th>
+                            <th>Type</th>
+                            <th>Size</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="file-list">
+                        {{TABLE_ROWS}}
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="empty" class="empty-state">
+                No matching files found.
+            </div>
+        </div>
+
+        <footer>
+            Generated automatically by GitHub Actions workflow.
+        </footer>
+    </div>
+
+    <script>
+        const searchInput = document.getElementById('search');
+        const filterPkgsBtn = document.getElementById('filter-pkgs');
+        const rows = document.querySelectorAll('.file-row');
+        const emptyState = document.getElementById('empty');
+
+        let pkgsOnly = false;
+
+        function updateFilters() {
+            const query = searchInput.value.toLowerCase().trim();
+            const terms = query.split(/\s+/).filter(t => t);
+            let visibleCount = 0;
+
+            rows.forEach(row => {
+                const name = row.getAttribute('data-name');
+                const matchesSearch = terms.every(term => name.includes(term));
+                const matchesPkg = !pkgsOnly || row.getAttribute('data-type') === 'pkg';
+
+                if (matchesSearch && matchesPkg) {
+                    row.style.display = '';
+                    visibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            emptyState.style.display = visibleCount === 0 ? 'block' : '';
+        }
+
+        searchInput.addEventListener('input', updateFilters);
+
+        filterPkgsBtn.addEventListener('click', () => {
+            pkgsOnly = !pkgsOnly;
+            filterPkgsBtn.classList.toggle('active', pkgsOnly);
+            updateFilters();
+        });
+    </script>
+</body>
+
+</html>
