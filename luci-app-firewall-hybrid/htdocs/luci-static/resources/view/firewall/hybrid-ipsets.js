@@ -12,72 +12,46 @@ function ipset_details_txt(sid, have_fw4) {
 	const items = [];
 
 	if (have_fw4) {
-		const entries = L.toArray(uci.get('firewall', sid, 'entry'));
-		if (entries.length > 0) {
-			entries.forEach(e => {
-				items.push(hybridtool.renderCapsule('Entry', e));
-			});
-		}
+		L.toArray(uci.get('firewall', sid, 'entry')).forEach(e => items.push(hybridtool.renderCapsule('Entry', e)));
 	} else {
 		const ext = uci.get('firewall', sid, 'external');
 		if (ext) {
 			items.push(hybridtool.renderCapsule('External Set', ext));
 		} else {
-			const storage = uci.get('firewall', sid, 'storage');
-			if (storage) {
-				items.push(hybridtool.renderCapsule('Storage', storage));
-			}
-			const iprange = uci.get('firewall', sid, 'iprange');
-			if (iprange) {
-				items.push(hybridtool.renderCapsule('IP Range', iprange));
-			}
-			const entries = L.toArray(uci.get('firewall', sid, 'entry'));
-			if (entries.length > 0) {
-				entries.forEach(e => {
-					items.push(hybridtool.renderCapsule('Entry', e));
-				});
-			}
-			const portrange = uci.get('firewall', sid, 'portrange');
-			if (portrange) {
-				items.push(hybridtool.renderCapsule('Port Range', portrange));
-			}
-			const netmask = uci.get('firewall', sid, 'netmask');
-			if (netmask) {
-				items.push(hybridtool.renderCapsule('Netmask', netmask));
-			}
+			['Storage:storage', 'IP Range:iprange'].forEach(x => {
+				const [label, field] = x.split(':');
+				const val = uci.get('firewall', sid, field);
+				if (val) items.push(hybridtool.renderCapsule(label, val));
+			});
+			L.toArray(uci.get('firewall', sid, 'entry')).forEach(e => items.push(hybridtool.renderCapsule('Entry', e)));
+			['Port Range:portrange', 'Netmask:netmask'].forEach(x => {
+				const [label, field] = x.split(':');
+				const val = uci.get('firewall', sid, field);
+				if (val) items.push(hybridtool.renderCapsule(label, val));
+			});
 		}
 	}
 
-	const loadfile = uci.get('firewall', sid, 'loadfile');
-	if (loadfile) {
-		items.push(hybridtool.renderCapsule('File', loadfile));
-	}
-
-	const maxelem = uci.get('firewall', sid, 'maxelem');
-	if (maxelem) {
-		items.push(hybridtool.renderCapsule('Max Elem', maxelem));
-	}
-
-	const hashsize = uci.get('firewall', sid, 'hashsize');
-	if (hashsize) {
-		items.push(hybridtool.renderCapsule('Hash Size', hashsize));
-	}
+	['File:loadfile', 'Max Elem:maxelem', 'Hash Size:hashsize'].forEach(x => {
+		const [label, field] = x.split(':');
+		const val = uci.get('firewall', sid, field);
+		if (val) items.push(hybridtool.renderCapsule(label, val));
+	});
 
 	const timeout = uci.get('firewall', sid, 'timeout');
 	if (timeout && timeout !== '0') {
 		items.push(hybridtool.renderCapsule('Timeout', timeout + 's'));
 	}
 
-	const counters = uci.get('firewall', sid, 'counters') === '1';
-	if (counters) {
+	if (uci.get('firewall', sid, 'counters') === '1') {
 		items.push(hybridtool.renderCapsule('Counters', _('Enabled')));
 	}
 
 	if (items.length === 0) {
-		return E('em', { 'style': 'color:#999;' }, _('No entries'));
+		return E('em', { style: 'color:#999;' }, _('No entries'));
 	}
 
-	return E('div', { 'style': 'display:flex; flex-flow:row wrap; gap:4px;' }, items);
+	return E('div', { style: 'display:flex; flex-flow:row wrap; gap:4px;' }, items);
 }
 
 
@@ -118,12 +92,7 @@ return view.extend({
 				o = s.option(form.Value, 'name', _('Name'));
 				o.optional = false;
 				o.rmempty = false;
-				o.validate = function (section_id, value) {
-					if (!/^[a-zA-Z_.][a-zA-Z0-9/_.-]*$/.test(value))
-						return _('Invalid set name');
-
-					return true;
-				};
+				o.validate = (section_id, value) => /^[a-zA-Z_.][a-zA-Z0-9/_.-]*$/.test(value) || _('Invalid set name');
 			} else {
 				o = s.option(form.Value, 'name', _('Name'));
 				o.depends({ external: '' });
@@ -179,10 +148,7 @@ return view.extend({
 			oFamily.modalonly = false;
 			oFamily.textvalue = function (sid) {
 				const f = uci.get('firewall', sid, 'family') || 'ipv4';
-				let label = '';
-				if (f === 'ipv4') label = 'IPv4';
-				else if (f === 'ipv6') label = 'IPv6';
-				else if (f === 'any') label = 'IPv4+IPv6';
+				const label = f === 'any' ? 'IPv4+IPv6' : (f === 'ipv6' ? 'IPv6' : 'IPv4');
 				return hybridtool.renderCapsule('Family', label);
 			};
 
@@ -190,9 +156,9 @@ return view.extend({
 			oMatch.modalonly = false;
 			oMatch.textvalue = function (sid) {
 				const mVal = L.toArray(uci.get('firewall', sid, 'match'));
-				if (!mVal.length) return E('em', { 'style': 'color:#999;' }, _('None'));
-				const items = mVal.map(val => hybridtool.renderCapsule('Match', val));
-				return E('div', { 'style': 'display:flex; flex-flow:row wrap; gap:4px;' }, items);
+				return mVal.length
+					? E('div', { style: 'display:flex; flex-flow:row wrap; gap:4px;' }, mVal.map(val => hybridtool.renderCapsule('Match', val)))
+					: E('em', { style: 'color:#999;' }, _('None'));
 			};
 
 			const oDetails = s.option(form.DummyValue, '_details', _('Details'));
@@ -309,47 +275,35 @@ return view.extend({
 			};
 		};
 
-		// Block 1: Dual-stack IP Sets
-		createSection(_('Dual-Stack IP Sets (IPv4 and IPv6)'), function (sid) {
-			return uci.get('firewall', sid, 'family') === 'any';
-		}, function (ev) {
+		const addIpsetSection = family => function(ev) {
 			const config_name = this.uciconfig || this.map.config;
 			const section_id = uci.add(config_name, this.sectiontype);
-			uci.set(config_name, section_id, 'family', 'any');
+			uci.set(config_name, section_id, 'family', family);
 			this.map.addedSection = section_id;
 			this.renderMoreOptionsModal(section_id);
-		}, true);
+		};
+
+		// Block 1: Dual-stack IP Sets
+		createSection(_('Dual-Stack IP Sets (IPv4 and IPv6)'),
+			sid => uci.get('firewall', sid, 'family') === 'any',
+			addIpsetSection('any'), true);
 
 		// Block 2: IPv4 IP Sets
-		createSection(_('IPv4 IP Sets'), function (sid) {
+		createSection(_('IPv4 IP Sets'), sid => {
 			const f = uci.get('firewall', sid, 'family');
 			return (!f || f === 'ipv4');
-		}, function (ev) {
-			const config_name = this.uciconfig || this.map.config;
-			const section_id = uci.add(config_name, this.sectiontype);
-			uci.set(config_name, section_id, 'family', 'ipv4');
-			this.map.addedSection = section_id;
-			this.renderMoreOptionsModal(section_id);
-		}, true);
+		}, addIpsetSection('ipv4'), true);
 
 		// Block 2: IPv6 IP Sets
-		createSection(_('IPv6 IP Sets'), function (sid) {
-			return uci.get('firewall', sid, 'family') === 'ipv6';
-		}, function (ev) {
-			const config_name = this.uciconfig || this.map.config;
-			const section_id = uci.add(config_name, this.sectiontype);
-			uci.set(config_name, section_id, 'family', 'ipv6');
-			this.map.addedSection = section_id;
-			this.renderMoreOptionsModal(section_id);
-		}, true);
+		createSection(_('IPv6 IP Sets'),
+			sid => uci.get('firewall', sid, 'family') === 'ipv6',
+			addIpsetSection('ipv6'), true);
 
-		return m.render().then(mapDom => {
-			return E('div', { 'class': 'cbi-map' }, [
-				E('h2', {}, [_('Firewall - IP Sets (Hybrid)')]),
-				E('div', { 'class': 'cbi-map-descr' }, [_('firewall4 supports referencing and creating IP sets to simplify matching of large address lists without the need to create one rule per item to match. Port ranges in ipsets are unsupported by firewall4. Blocks are collapsible.')]),
-				searchInput,
-				mapDom
-			]);
-		});
+		return m.render().then(mapDom => E('div', { class: 'cbi-map' }, [
+			E('h2', {}, [_('Firewall - IP Sets (Hybrid)')]),
+			E('div', { class: 'cbi-map-descr' }, [_('firewall4 supports referencing and creating IP sets to simplify matching of large address lists without the need to create one rule per item to match. Port ranges in ipsets are unsupported by firewall4. Blocks are collapsible.')]),
+			searchInput,
+			mapDom
+		]));
 	}
 });

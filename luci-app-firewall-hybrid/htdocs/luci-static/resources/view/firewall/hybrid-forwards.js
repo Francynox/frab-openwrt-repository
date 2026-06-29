@@ -12,108 +12,80 @@
 function rule_proto_txt(s, ctHelpers) {
 	const family = (uci.get('firewall', s, 'family') || '').toLowerCase().replace(/^(?:all|\*)$/, 'any');
 	const dip = uci.get('firewall', s, 'dest_ip') || '';
-	const ipv4 = ((!family && dip.indexOf(':') == -1) || family == 'any' || (!family && !dip) || family == 'ipv4');
-	const ipv6 = ((!family && dip.indexOf(':') != -1) || family == 'any' || family == 'ipv6');
+	const ipv4 = !family && !dip.includes(':') || family === 'any' || (!family && !dip) || family === 'ipv4';
+	const ipv6 = !family && dip.includes(':') || family === 'any' || family === 'ipv6';
 
 	const proto = hybridtool.parseProto(uci.get('firewall', s, 'proto'), uci.get('firewall', s, 'icmp_type'));
 	const h = hybridtool.parseHelper(uci.get('firewall', s, 'helper'), ctHelpers);
 	const f = hybridtool.parseMark(uci.get('firewall', s, 'mark'));
 
 	const familyItems = [];
+	const famText = (ipv4 && ipv6) ? 'IPv4+IPv6' : (ipv4 ? 'IPv4' : (ipv6 ? 'IPv6' : null));
+	if (famText) familyItems.push(hybridtool.renderCapsule('Family', famText));
+
 	const protoItems = [];
 	const icmpItems = [];
-	const matchItems = [];
-
-	if (ipv4 && ipv6) {
-		familyItems.push(hybridtool.renderCapsule('Family', 'IPv4+IPv6'));
-	} else if (ipv4) {
-		familyItems.push(hybridtool.renderCapsule('Family', 'IPv4'));
-	} else if (ipv6) {
-		familyItems.push(hybridtool.renderCapsule('Family', 'IPv6'));
-	}
-
 	if (proto && proto.length) {
 		proto.forEach(p => {
 			protoItems.push(hybridtool.renderCapsule('Proto', p.name.toUpperCase()));
-			if (p.types && p.types.length) {
-				p.types.forEach(t => icmpItems.push(hybridtool.renderCapsule('ICMP', t)));
-			}
+			(p.types || []).forEach(t => icmpItems.push(hybridtool.renderCapsule('ICMP', t)));
 		});
 	} else {
 		protoItems.push(hybridtool.renderCapsule('Proto', _('Any')));
 	}
 
-	if (f) matchItems.push(hybridtool.renderMarkCapsule(f));
-	if (h) matchItems.push(hybridtool.renderHelperCapsule(h));
+	const matchItems = [
+		f ? hybridtool.renderMarkCapsule(f) : null,
+		h ? hybridtool.renderHelperCapsule(h) : null
+	].filter(Boolean);
 
-	const children = [];
-	if (familyItems.length)
-		children.push(hybridtool.renderGroup('family-group', familyItems));
-	if (protoItems.length)
-		children.push(hybridtool.renderGroup('proto-group', protoItems));
-	if (icmpItems.length)
-		children.push(hybridtool.renderGroup('icmp-group', icmpItems));
-	if (matchItems.length)
-		children.push(hybridtool.renderGroup('match-group', matchItems));
+	const children = [
+		familyItems.length && hybridtool.renderGroup('family-group', familyItems),
+		protoItems.length && hybridtool.renderGroup('proto-group', protoItems),
+		icmpItems.length && hybridtool.renderGroup('icmp-group', icmpItems),
+		matchItems.length && hybridtool.renderGroup('match-group', matchItems)
+	].filter(Boolean);
 
-	if (!children.length)
-		return E('em', { style: 'color:#999;' }, _('Any Protocol'));
-
-	return E('div', { 'style': 'display:flex; flex-direction:column; gap:4px;' }, children);
+	return children.length ? E('div', { style: 'display:flex; flex-direction:column; gap:4px;' }, children) : E('em', { style: 'color:#999;' }, _('Any Protocol'));
 }
 
 function rule_src_txt(s, hosts) {
 	const z = uci.get('firewall', s, 'src');
-
-	const baseItems = [];
+	const baseItems = [hybridtool.renderZoneBadge(z)];
 	const addrItems = [];
 
-	baseItems.push(hybridtool.renderZoneBadge(z));
+	(fwtool.map_invert(uci.get('firewall', s, 'src_ip'), 'toLowerCase') || []).forEach(ip => {
+		addrItems.push(hybridtool.renderCapsule('IP', ip.ival, ip.inv));
+	});
 
-	const ips = fwtool.map_invert(uci.get('firewall', s, 'src_ip'), 'toLowerCase');
-	if (ips && ips.length) {
-		ips.forEach(ip => addrItems.push(hybridtool.renderCapsule('IP', ip.ival, ip.inv)));
-	}
+	(fwtool.map_invert(uci.get('firewall', s, 'src_mac'), 'toUpperCase') || []).forEach(mac => {
+		addrItems.push(hybridtool.renderCapsule('MAC', mac.ival, mac.inv, hosts[mac.val]?.name));
+	});
 
-	const macs = fwtool.map_invert(uci.get('firewall', s, 'src_mac'), 'toUpperCase');
-	if (macs && macs.length) {
-		macs.forEach(mac => {
-			const hint = hosts[mac.val] ? hosts[mac.val].name : null;
-			addrItems.push(hybridtool.renderCapsule('MAC', mac.ival, mac.inv, hint));
-		});
-	}
+	(fwtool.map_invert(uci.get('firewall', s, 'src_port')) || []).forEach(p => {
+		addrItems.push(hybridtool.renderCapsule('Port', p.ival, p.inv));
+	});
 
-	const ports = fwtool.map_invert(uci.get('firewall', s, 'src_port'));
-	if (ports && ports.length) {
-		ports.forEach(p => addrItems.push(hybridtool.renderCapsule('Port', p.ival, p.inv)));
-	}
+	const children = [
+		baseItems.length && hybridtool.renderGroup('base-group', baseItems, true),
+		addrItems.length && hybridtool.renderGroup('addr-group', addrItems)
+	].filter(Boolean);
 
-	const children = [];
-	if (baseItems.length)
-		children.push(hybridtool.renderGroup('base-group', baseItems, true));
-	if (addrItems.length)
-		children.push(hybridtool.renderGroup('addr-group', addrItems));
-
-	return E('div', { 'style': 'display:flex; flex-direction:column; gap:4px;' }, children);
+	return E('div', { style: 'display:flex; flex-direction:column; gap:4px;' }, children);
 }
 
 function rule_dest_txt(s) {
 	const addrItems = [];
 
-	const ips = fwtool.map_invert(uci.get('firewall', s, 'src_dip'), 'toLowerCase');
-	if (ips && ips.length) {
-		ips.forEach(ip => addrItems.push(hybridtool.renderCapsule('IP', ip.ival, ip.inv)));
-	}
+	(fwtool.map_invert(uci.get('firewall', s, 'src_dip'), 'toLowerCase') || []).forEach(ip => {
+		addrItems.push(hybridtool.renderCapsule('IP', ip.ival, ip.inv));
+	});
 
-	const ports = fwtool.map_invert(uci.get('firewall', s, 'src_dport'));
-	if (ports && ports.length) {
-		ports.forEach(p => addrItems.push(hybridtool.renderCapsule('Port', p.ival, p.inv)));
-	}
+	(fwtool.map_invert(uci.get('firewall', s, 'src_dport')) || []).forEach(p => {
+		addrItems.push(hybridtool.renderCapsule('Port', p.ival, p.inv));
+	});
 
-	if (!addrItems.length)
-		return E('em', { 'style': 'color:#999;' }, _('Any'));
-
-	return hybridtool.renderGroup('addr-group', addrItems);
+	return addrItems.length ? hybridtool.renderGroup('addr-group', addrItems) : E('em', { style: 'color:#999;' }, _('Any'));
 }
 
 function rule_target_txt(s) {
@@ -121,39 +93,29 @@ function rule_target_txt(s) {
 	const dest_ip = (uci.get('firewall', s, 'dest_ip') || '').toLowerCase();
 	const dest_port = uci.get('firewall', s, 'dest_port');
 
-	const baseItems = [];
-	baseItems.push(hybridtool.renderZoneBadge(z, 'To Zone'));
+	const baseItems = [hybridtool.renderZoneBadge(z, 'To Zone')];
+	if (dest_ip) baseItems.push(hybridtool.renderCapsule(_('To IP'), dest_ip));
+	if (dest_port) baseItems.push(hybridtool.renderCapsule(_('To Port'), dest_port));
 
-	if (dest_ip) {
-		baseItems.push(hybridtool.renderCapsule(_('To IP'), dest_ip));
-	}
-	if (dest_port) {
-		baseItems.push(hybridtool.renderCapsule(_('To Port'), dest_port));
-	}
-
-	const reflection = uci.get('firewall', s, 'reflection');
-	if (reflection !== '0') {
-		const refSrc = uci.get('firewall', s, 'reflection_src');
-		const srcText = (refSrc === 'external') ? _('External') : _('Internal');
+	if (uci.get('firewall', s, 'reflection') !== '0') {
+		const srcText = uci.get('firewall', s, 'reflection_src') === 'external' ? _('External') : _('Internal');
 		const loopbackStyle = 'background:rgba(0,123,255,0.08); color:#007bff; border-color:rgba(0,123,255,0.18); margin-top:2px;';
 		baseItems.push(hybridtool.renderCapsule(_('Loopback'), srcText, false, null, null, loopbackStyle));
 	}
-	return E('div', { 'style': 'display:flex; flex-direction:column; gap:4px; align-items:flex-start;' }, baseItems);
+	return E('div', { style: 'display:flex; flex-direction:column; gap:4px; align-items:flex-start;' }, baseItems);
 }
 
 function validate_opt_family(m, section_id, opt) {
 	const dopt = m.section.getOption('dest_ip');
 	const fmopt = m.section.getOption('family');
 
-	if (!dopt.isValid(section_id) && opt != 'dest_ip')
-		return true;
-	if (!fmopt.isValid(section_id) && opt != 'family')
+	if ((!dopt.isValid(section_id) && opt !== 'dest_ip') || (!fmopt.isValid(section_id) && opt !== 'family'))
 		return true;
 
 	const dip = dopt.formvalue(section_id) || '';
 	const fm = fmopt.formvalue(section_id) || '';
 
-	if (fm == '' || (fm == 'any' && dip == '') || (fm == 'ipv6' && (dip.indexOf(':') != -1 || dip == '')) || (fm == 'ipv4' && dip.indexOf(':') == -1))
+	if (!fm || (fm === 'any' && !dip) || (fm === 'ipv6' && (dip.includes(':') || !dip)) || (fm === 'ipv4' && !dip.includes(':')))
 		return true;
 
 	return _('Address family, Internal IP address must match');
@@ -237,15 +199,10 @@ return view.extend({
 				oFamily.value('', _('automatic'));
 				oFamily.cfgvalue = function (section_id) {
 					const val = this.map.data.get(this.map.config, section_id, 'family');
-
-					if (!val)
-						return '';
-					else if (val == 'any' || val == 'all' || val == '*')
-						return 'any';
-					else if (val == 'inet' || String(val).indexOf('4') != -1)
-						return 'ipv4';
-					else if (String(val).indexOf('6') != -1)
-						return 'ipv6';
+					if (!val) return '';
+					if (val === 'any' || val === 'all' || val === '*') return 'any';
+					if (val === 'inet' || String(val).includes('4')) return 'ipv4';
+					if (String(val).includes('6')) return 'ipv6';
 				};
 				oFamily.validate = function (section_id, value) {
 					fwtool.updateHostHints(this.map, section_id, 'dest_ip', value, hosts);
@@ -273,12 +230,13 @@ return view.extend({
 				const limit = hybridtool.rule_limit_txt(sid);
 				const ipset = uci.get('firewall', sid, 'ipset');
 
-				const items = [];
-				if (dest) items.push(E('div', { 'style': 'padding: 2px 0;' }, dest));
-				if (ipset) items.push(E('div', { 'style': 'padding: 2px 0;' }, hybridtool.renderCapsule('IPSet', ipset)));
-				if (limit) items.push(E('div', { 'style': 'padding: 2px 0;' }, limit));
+				const items = [
+					dest && E('div', { style: 'padding: 2px 0;' }, dest),
+					ipset && E('div', { style: 'padding: 2px 0;' }, hybridtool.renderCapsule('IPSet', ipset)),
+					limit && E('div', { style: 'padding: 2px 0;' }, limit)
+				].filter(Boolean);
 
-				return E('div', { 'style': 'font-size: 0.95em;' }, items);
+				return E('div', { style: 'font-size: 0.95em;' }, items);
 			};
 
 			const oAction = s.option(form.DummyValue, '_action', _('Action'));
@@ -391,15 +349,11 @@ return view.extend({
 			o = s.taboption('advanced', form.Value, 'helper', _('Match helper'), _('Match traffic using the specified connection tracking helper.'));
 			o.modalonly = true;
 			o.placeholder = _('any');
-			for (let cth of ctHelpers)
-				o.value(cth.name, '%s (%s)'.format(cth.description, cth.name.toUpperCase()));
+			ctHelpers.forEach(cth => o.value(cth.name, '%s (%s)'.format(cth.description, cth.name.toUpperCase())));
 			o.validate = function (section_id, value) {
-				if (value == '' || value == null)
-					return true;
-				value = value.replace(/^!\s*/, '');
-				for (let cth of ctHelpers)
-					if (value == cth.name)
-						return true;
+				if (value === '' || value == null) return true;
+				const cleanVal = value.replace(/^!\s*/, '');
+				if (ctHelpers.some(cth => cleanVal === cth.name)) return true;
 				return _('Unknown or not installed conntrack helper "%s"').format(value);
 			};
 
@@ -432,27 +386,27 @@ return view.extend({
 		const h2 = m.section(form.TypedSection, 'redirect', _('Zone-specific Port Forwards'));
 		h2.anonymous = true;
 		h2.render = function () {
-			return E('div', { 'style': 'margin-top: 0.5em; border-bottom: 2px solid #ccc; padding-bottom: 0.3em; display: flex; justify-content: space-between; align-items: center;' }, [
-				E('h2', { 'style': 'margin: 0; font-size: 1.3em;' }, [this.title]),
+			return E('div', { style: 'margin-top: 0.5em; border-bottom: 2px solid #ccc; padding-bottom: 0.3em; display: flex; justify-content: space-between; align-items: center;' }, [
+				E('h2', { style: 'margin: 0; font-size: 1.3em;' }, [this.title]),
 				E('button', {
-					'class': 'btn cbi-button-add',
-					'click': ui.createHandlerFn(this, function (ev) {
-						const select = E('select', { 'class': 'cbi-input-select' },
-							zones.map(z => E('option', { 'value': z.name }, [z.name]))
+					class: 'btn cbi-button-add',
+					click: ui.createHandlerFn(this, function () {
+						const select = E('select', { class: 'cbi-input-select' },
+							zones.map(z => E('option', { value: z.name }, [z.name]))
 						);
 
 						ui.showModal(_('Add Port Forward to Zone'), [
 							E('p', _('Select the source zone for the new port forward:')),
-							E('div', { 'style': 'margin: 1em 0;' }, [select]),
-							E('div', { 'class': 'right' }, [
+							E('div', { style: 'margin: 1em 0;' }, [select]),
+							E('div', { class: 'right' }, [
 								E('button', {
-									'class': 'btn cbi-button-neutral',
-									'style': 'margin-right: 0.5em;',
-									'click': function () { ui.hideModal(); }
+									class: 'btn cbi-button-neutral',
+									style: 'margin-right: 0.5em;',
+									click: () => ui.hideModal()
 								}, [_('Cancel')]),
 								E('button', {
-									'class': 'btn cbi-button-action important',
-									'click': ui.createHandlerFn(this, function () {
+									class: 'btn cbi-button-action important',
+									click: ui.createHandlerFn(this, function () {
 										const chosenZone = select.value;
 										ui.hideModal();
 										if (!chosenZone) return;
@@ -497,9 +451,9 @@ return view.extend({
 		});
 
 		return m.render().then(mapDom => {
-			return E('div', { 'class': 'cbi-map' }, [
+			return E('div', { class: 'cbi-map' }, [
 				E('h2', {}, [_('Firewall - Port Forwards (Hybrid)')]),
-				E('div', { 'class': 'cbi-map-descr' }, [_('Port forwarding allows remote computers on the Internet to connect to a specific computer or service within the private LAN. Blocks are collapsible.')]),
+				E('div', { class: 'cbi-map-descr' }, [_('Port forwarding allows remote computers on the Internet to connect to a specific computer or service within the private LAN. Blocks are collapsible.')]),
 				searchInput,
 				mapDom
 			]);

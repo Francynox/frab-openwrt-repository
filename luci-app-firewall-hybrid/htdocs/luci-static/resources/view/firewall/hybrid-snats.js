@@ -14,95 +14,68 @@ function rule_proto_txt(s) {
 	const sip = uci.get('firewall', s, 'src_ip') || '';
 	const dip = uci.get('firewall', s, 'dest_ip') || '';
 	const rwip = uci.get('firewall', s, 'snat_ip') || '';
-	const ipv4 = (family == 'ipv4' || family == 'any' || (!family && sip.indexOf(':') == -1 && dip.indexOf(':') == -1 && rwip.indexOf(':') == -1));
-	const ipv6 = (family == 'ipv6' || family == 'any' || (!family && (sip.indexOf(':') != -1 || dip.indexOf(':') != -1 || rwip.indexOf(':') != -1)));
+	const ipv4 = family === 'ipv4' || family === 'any' || (!family && !sip.includes(':') && !dip.includes(':') && !rwip.includes(':'));
+	const ipv6 = family === 'ipv6' || family === 'any' || (!family && (sip.includes(':') || dip.includes(':') || rwip.includes(':')));
 
 	const proto = hybridtool.parseProto(uci.get('firewall', s, 'proto'));
 	const f = hybridtool.parseMark(uci.get('firewall', s, 'mark'));
 
-	const familyItems = [];
-	const protoItems = [];
-	const matchItems = [];
+	const famText = (ipv4 && ipv6) ? 'IPv4+IPv6' : (ipv4 ? 'IPv4' : (ipv6 ? 'IPv6' : null));
+	const familyItems = famText ? [hybridtool.renderCapsule('Family', famText)] : [];
 
-	if (ipv4 && ipv6) {
-		familyItems.push(hybridtool.renderCapsule('Family', 'IPv4+IPv6'));
-	} else if (ipv4) {
-		familyItems.push(hybridtool.renderCapsule('Family', 'IPv4'));
-	} else if (ipv6) {
-		familyItems.push(hybridtool.renderCapsule('Family', 'IPv6'));
-	}
+	const protoItems = proto && proto.length
+		? proto.map(p => hybridtool.renderCapsule('Proto', p.name.toUpperCase()))
+		: [hybridtool.renderCapsule('Proto', _('Any'))];
 
-	if (proto && proto.length) {
-		proto.forEach(p => {
-			protoItems.push(hybridtool.renderCapsule('Proto', p.name.toUpperCase()));
-		});
-	} else {
-		protoItems.push(hybridtool.renderCapsule('Proto', _('Any')));
-	}
+	const matchItems = [f && hybridtool.renderMarkCapsule(f)].filter(Boolean);
 
-	if (f) matchItems.push(hybridtool.renderMarkCapsule(f));
+	const children = [
+		familyItems.length && hybridtool.renderGroup('family-group', familyItems),
+		protoItems.length && hybridtool.renderGroup('proto-group', protoItems),
+		matchItems.length && hybridtool.renderGroup('match-group', matchItems)
+	].filter(Boolean);
 
-	const children = [];
-	if (familyItems.length)
-		children.push(hybridtool.renderGroup('family-group', familyItems));
-	if (protoItems.length)
-		children.push(hybridtool.renderGroup('proto-group', protoItems));
-	if (matchItems.length)
-		children.push(hybridtool.renderGroup('match-group', matchItems));
-
-	if (!children.length)
-		return E('em', { style: 'color:#999;' }, _('Any Protocol'));
-
-	return E('div', { 'style': 'display:flex; flex-direction:column; gap:4px;' }, children);
+	return children.length ? E('div', { style: 'display:flex; flex-direction:column; gap:4px;' }, children) : E('em', { style: 'color:#999;' }, _('Any Protocol'));
 }
 
 function rule_src_txt(s, hosts) {
 	const addrItems = [];
 
-	const ips = fwtool.map_invert(uci.get('firewall', s, 'src_ip'), 'toLowerCase');
-	if (ips && ips.length) {
-		ips.forEach(ip => addrItems.push(hybridtool.renderCapsule('IP', ip.ival, ip.inv)));
-	}
+	(fwtool.map_invert(uci.get('firewall', s, 'src_ip'), 'toLowerCase') || []).forEach(ip => {
+		addrItems.push(hybridtool.renderCapsule('IP', ip.ival, ip.inv));
+	});
 
-	const ports = fwtool.map_invert(uci.get('firewall', s, 'src_port'));
-	if (ports && ports.length) {
-		ports.forEach(p => addrItems.push(hybridtool.renderCapsule('Port', p.ival, p.inv)));
-	}
+	(fwtool.map_invert(uci.get('firewall', s, 'src_port')) || []).forEach(p => {
+		addrItems.push(hybridtool.renderCapsule('Port', p.ival, p.inv));
+	});
 
-	if (!addrItems.length)
-		return E('em', { 'style': 'color:#999;' }, _('Any'));
-
-	return hybridtool.renderGroup('addr-group', addrItems);
+	return addrItems.length ? hybridtool.renderGroup('addr-group', addrItems) : E('em', { style: 'color:#999;' }, _('Any'));
 }
 
 function rule_dest_txt(s) {
 	const z = uci.get('firewall', s, 'src');
 	const d = uci.get('firewall', s, 'device');
 
-	const baseItems = [];
+	const baseItems = [
+		hybridtool.renderZoneBadge(z),
+		d ? hybridtool.renderCapsule('IF', d) : null
+	].filter(Boolean);
+
 	const addrItems = [];
+	(fwtool.map_invert(uci.get('firewall', s, 'dest_ip'), 'toLowerCase') || []).forEach(ip => {
+		addrItems.push(hybridtool.renderCapsule('IP', ip.ival, ip.inv));
+	});
 
-	baseItems.push(hybridtool.renderZoneBadge(z));
+	(fwtool.map_invert(uci.get('firewall', s, 'dest_port')) || []).forEach(p => {
+		addrItems.push(hybridtool.renderCapsule('Port', p.ival, p.inv));
+	});
 
-	if (d) baseItems.push(hybridtool.renderCapsule('IF', d));
+	const children = [
+		baseItems.length && hybridtool.renderGroup('base-group', baseItems, true),
+		addrItems.length && hybridtool.renderGroup('addr-group', addrItems)
+	].filter(Boolean);
 
-	const ips = fwtool.map_invert(uci.get('firewall', s, 'dest_ip'), 'toLowerCase');
-	if (ips && ips.length) {
-		ips.forEach(ip => addrItems.push(hybridtool.renderCapsule('IP', ip.ival, ip.inv)));
-	}
-
-	const ports = fwtool.map_invert(uci.get('firewall', s, 'dest_port'));
-	if (ports && ports.length) {
-		ports.forEach(p => addrItems.push(hybridtool.renderCapsule('Port', p.ival, p.inv)));
-	}
-
-	const children = [];
-	if (baseItems.length)
-		children.push(hybridtool.renderGroup('base-group', baseItems, true));
-	if (addrItems.length)
-		children.push(hybridtool.renderGroup('addr-group', addrItems));
-
-	return E('div', { 'style': 'display:flex; flex-direction:column; gap:4px;' }, children);
+	return E('div', { style: 'display:flex; flex-direction:column; gap:4px;' }, children);
 }
 
 function rule_target_txt(sid) {
@@ -117,10 +90,7 @@ function rule_target_txt(sid) {
 	if (t === 'SNAT') {
 		style = 'background:rgba(23,162,184,0.15); color:#17a2b8; border-color:rgba(23,162,184,0.25);';
 		val = _('SNAT');
-		const items = [];
-		if (snat_ip) items.push(snat_ip);
-		if (snat_port) items.push(snat_port);
-		details = items.join(':');
+		details = [snat_ip, snat_port].filter(Boolean).join(':');
 	} else if (t === 'MASQUERADE') {
 		style = 'background:rgba(40,167,69,0.15); color:#28a745; border-color:rgba(40,167,69,0.25);';
 		val = _('Masquerade');
@@ -129,45 +99,35 @@ function rule_target_txt(sid) {
 		val = _('Accept (No Rewrite)');
 	}
 
-	const displayVal = details ? '%s (%s)'.format(val, details) : val;
-
-	return hybridtool.renderCapsule(_('Action'), displayVal, false, null, null, style);
+	return hybridtool.renderCapsule(_('Action'), details ? `${val} (${details})` : val, false, null, null, style);
 }
 
 function validate_opt_family(m, section_id, opt) {
-	const sopt = m.section.getOption('src_ip');
-	const dopt = m.section.getOption('dest_ip');
-	const rwopt = m.section.getOption('snat_ip');
-	const fmopt = m.section.getOption('family');
-	const tgopt = m.section.getOption('target');
+	const opts = {
+		src_ip: m.section.getOption('src_ip'),
+		dest_ip: m.section.getOption('dest_ip'),
+		snat_ip: m.section.getOption('snat_ip'),
+		family: m.section.getOption('family'),
+		target: m.section.getOption('target')
+	};
 
-	if (!sopt.isValid(section_id) && opt != 'src_ip')
-		return true;
-	if (!dopt.isValid(section_id) && opt != 'dest_ip')
-		return true;
-	if (!rwopt.isValid(section_id) && opt != 'snat_ip')
-		return true;
-	if (!fmopt.isValid(section_id) && opt != 'family')
-		return true;
-	if (!tgopt.isValid(section_id) && opt != 'target')
-		return true;
-
-	const sip = sopt.formvalue(section_id) || '';
-	const dip = dopt.formvalue(section_id) || '';
-	const rwip = rwopt.formvalue(section_id) || '';
-	const fm = fmopt.formvalue(section_id) || '';
-	const tg = tgopt.formvalue(section_id);
-
-	if (fm == 'ipv6' && (sip.indexOf(':') != -1 || sip == '') && (dip.indexOf(':') != -1 || dip == '') && ((rwip.indexOf(':') != -1 && tg == 'SNAT') || rwip == ''))
-		return true;
-	if (fm == 'ipv4' && (sip.indexOf(':') == -1) && (dip.indexOf(':') == -1) && ((rwip.indexOf(':') == -1 && tg == 'SNAT') || rwip == ''))
-		return true;
-	if (fm == '' || fm == 'any') {
-		if ((sip.indexOf(':') != -1 || sip == '') && (dip.indexOf(':') != -1 || dip == '') && ((rwip.indexOf(':') != -1 && tg == 'SNAT') || rwip == ''))
-			return true;
-		if ((sip.indexOf(':') == -1) && (dip.indexOf(':') == -1) && ((rwip.indexOf(':') == -1 && tg == 'SNAT') || rwip == ''))
+	for (const [k, o] of Object.entries(opts)) {
+		if (o && !o.isValid(section_id) && opt !== k)
 			return true;
 	}
+
+	const sip = opts.src_ip?.formvalue(section_id) || '';
+	const dip = opts.dest_ip?.formvalue(section_id) || '';
+	const rwip = opts.snat_ip?.formvalue(section_id) || '';
+	const fm = opts.family?.formvalue(section_id) || '';
+	const tg = opts.target?.formvalue(section_id);
+
+	const isV6 = (sip.includes(':') || !sip) && (dip.includes(':') || !dip) && ((rwip.includes(':') && tg === 'SNAT') || !rwip);
+	const isV4 = !sip.includes(':') && !dip.includes(':') && ((!rwip.includes(':') && tg === 'SNAT') || !rwip);
+
+	if (fm === 'ipv6' && isV6) return true;
+	if (fm === 'ipv4' && isV4) return true;
+	if ((!fm || fm === 'any') && (isV6 || isV4)) return true;
 
 	return _('Address family, source address, destination address, rewrite IP address must match');
 }
@@ -244,15 +204,10 @@ return view.extend({
 				oFamily.value('', _('automatic'));
 				oFamily.cfgvalue = function (section_id) {
 					const val = this.map.data.get(this.map.config, section_id, 'family');
-
-					if (!val)
-						return '';
-					else if (val == 'any' || val == 'all' || val == '*')
-						return 'any';
-					else if (val == 'inet' || String(val).indexOf('4') != -1)
-						return 'ipv4';
-					else if (String(val).indexOf('6') != -1)
-						return 'ipv6';
+					if (!val) return '';
+					if (val === 'any' || val === 'all' || val === '*') return 'any';
+					if (val === 'inet' || String(val).includes('4')) return 'ipv4';
+					if (String(val).includes('6')) return 'ipv6';
 				};
 				oFamily.validate = function (section_id, value) {
 					fwtool.updateHostHints(this.map, section_id, 'src_ip', value, hosts);
@@ -281,12 +236,13 @@ return view.extend({
 				const limit = hybridtool.rule_limit_txt(sid);
 				const ipset = uci.get('firewall', sid, 'ipset');
 
-				const items = [];
-				if (dest) items.push(E('div', { 'style': 'padding: 2px 0;' }, dest));
-				if (ipset) items.push(E('div', { 'style': 'padding: 2px 0;' }, hybridtool.renderCapsule('IPSet', ipset)));
-				if (limit) items.push(E('div', { 'style': 'padding: 2px 0;' }, limit));
+				const items = [
+					dest && E('div', { style: 'padding: 2px 0;' }, dest),
+					ipset && E('div', { style: 'padding: 2px 0;' }, hybridtool.renderCapsule('IPSet', ipset)),
+					limit && E('div', { style: 'padding: 2px 0;' }, limit)
+				].filter(Boolean);
 
-				return E('div', { 'style': 'font-size: 0.95em;' }, items);
+				return E('div', { style: 'font-size: 0.95em;' }, items);
 			};
 
 			const oAction = s.option(form.DummyValue, '_action', _('Action'));
@@ -294,13 +250,9 @@ return view.extend({
 			oAction.textvalue = function (sid) {
 				const targetCapsule = rule_target_txt(sid);
 				const timeCapsule = hybridtool.rule_time_txt(sid);
-				if (timeCapsule) {
-					return E('div', { 'style': 'display:flex; flex-direction:column; gap:4px; align-items:flex-start;' }, [
-						targetCapsule,
-						timeCapsule
-					]);
-				}
-				return targetCapsule;
+				return timeCapsule
+					? E('div', { style: 'display:flex; flex-direction:column; gap:4px; align-items:flex-start;' }, [targetCapsule, timeCapsule])
+					: targetCapsule;
 			};
 
 			const oEnabled = s.option(form.Flag, 'enabled', _('Enable'));
@@ -428,44 +380,46 @@ return view.extend({
 			};
 		};
 
+		const addNatSection = srcZone => function (ev) {
+			const config_name = this.uciconfig || this.map.config;
+			const section_id = uci.add(config_name, this.sectiontype);
+			uci.set(config_name, section_id, 'src', srcZone);
+			uci.set(config_name, section_id, 'target', 'SNAT');
+			this.map.addedSection = section_id;
+			this.renderMoreOptionsModal(section_id);
+		};
+
 		// Block 1
 		createSection(_('Global NAT Rules'), function (sid) {
 			const s_src = uci.get('firewall', sid, 'src');
 			return (s_src === undefined || s_src === '' || s_src === '*');
-		}, function (ev) {
-			const config_name = this.uciconfig || this.map.config;
-			const section_id = uci.add(config_name, this.sectiontype);
-			uci.set(config_name, section_id, 'src', '*');
-			uci.set(config_name, section_id, 'target', 'SNAT');
-			this.map.addedSection = section_id;
-			this.renderMoreOptionsModal(section_id);
-		}, true);
+		}, addNatSection('*'), true);
 
 		// Block 2 Header
 		const h2 = m.section(form.TypedSection, 'nat', _('Outbound Zone-specific NAT Rules'));
 		h2.anonymous = true;
 		h2.render = function () {
-			return E('div', { 'style': 'margin-top: 1.5em; border-bottom: 2px solid #ccc; padding-bottom: 0.3em; display: flex; justify-content: space-between; align-items: center;' }, [
-				E('h2', { 'style': 'margin: 0; font-size: 1.3em;' }, [this.title]),
+			return E('div', { style: 'margin-top: 1.5em; border-bottom: 2px solid #ccc; padding-bottom: 0.3em; display: flex; justify-content: space-between; align-items: center;' }, [
+				E('h2', { style: 'margin: 0; font-size: 1.3em;' }, [this.title]),
 				E('button', {
-					'class': 'btn cbi-button-add',
-					'click': ui.createHandlerFn(this, function (ev) {
-						const select = E('select', { 'class': 'cbi-input-select' },
-							zones.map(z => E('option', { 'value': z.name }, [z.name]))
+					class: 'btn cbi-button-add',
+					click: ui.createHandlerFn(this, function () {
+						const select = E('select', { class: 'cbi-input-select' },
+							zones.map(z => E('option', { value: z.name }, [z.name]))
 						);
 
 						ui.showModal(_('Add NAT Rule to Zone'), [
 							E('p', _('Select the outbound zone for the new NAT rule:')),
-							E('div', { 'style': 'margin: 1em 0;' }, [select]),
-							E('div', { 'class': 'right' }, [
+							E('div', { style: 'margin: 1em 0;' }, [select]),
+							E('div', { class: 'right' }, [
 								E('button', {
-									'class': 'btn cbi-button-neutral',
-									'style': 'margin-right: 0.5em;',
-									'click': function () { ui.hideModal(); }
+									class: 'btn cbi-button-neutral',
+									style: 'margin-right: 0.5em;',
+									click: () => ui.hideModal()
 								}, [_('Cancel')]),
 								E('button', {
-									'class': 'btn cbi-button-action important',
-									'click': ui.createHandlerFn(this, function () {
+									class: 'btn cbi-button-action important',
+									click: ui.createHandlerFn(this, function () {
 										const chosenZone = select.value;
 										ui.hideModal();
 										if (!chosenZone) return;
@@ -497,23 +451,14 @@ return view.extend({
 			createSection(title, function (sid) {
 				const s_src = uci.get('firewall', sid, 'src');
 				return s_src === srcZone;
-			}, function (ev) {
-				const config_name = this.uciconfig || this.map.config;
-				const section_id = uci.add(config_name, this.sectiontype);
-				uci.set(config_name, section_id, 'src', srcZone);
-				uci.set(config_name, section_id, 'target', 'SNAT');
-				this.map.addedSection = section_id;
-				this.renderMoreOptionsModal(section_id);
-			});
+			}, addNatSection(srcZone));
 		});
 
-		return m.render().then(mapDom => {
-			return E('div', { 'class': 'cbi-map' }, [
-				E('h2', {}, [_('Firewall - NAT Rules (Hybrid)')]),
-				E('div', { 'class': 'cbi-map-descr' }, [_('NAT rules allow fine grained control over the source IP to use for outbound or forwarded traffic. Blocks are collapsible.')]),
-				searchInput,
-				mapDom
-			]);
-		});
+		return m.render().then(mapDom => E('div', { class: 'cbi-map' }, [
+			E('h2', {}, [_('Firewall - NAT Rules (Hybrid)')]),
+			E('div', { class: 'cbi-map-descr' }, [_('NAT rules allow fine grained control over the source IP to use for outbound or forwarded traffic. Blocks are collapsible.')]),
+			searchInput,
+			mapDom
+		]));
 	}
 });

@@ -16,7 +16,8 @@ function rule_proto_txt(s, ctHelpers) {
 	const h = hybridtool.parseHelper(uci.get('firewall', s, 'helper'), ctHelpers);
 	const w = hybridtool.parseMark(uci.get('firewall', s, 'mark'));
 
-	const m = String(uci.get('firewall', s, 'dscp')).match(/^(!\s*)?(?:(CS[0-7]|BE|AF[1234][123]|EF)|(0x[0-9a-f]{1,2}|[0-9]{1,2}))$/);
+	const dscp = uci.get('firewall', s, 'dscp');
+	const m = dscp ? String(dscp).match(/^(!\s*)?(?:(CS[0-7]|BE|AF[1234][123]|EF)|(0x[0-9a-f]{1,2}|[0-9]{1,2}))$/) : null;
 	const d = m ? {
 		val: m[0],
 		inv: m[1],
@@ -24,159 +25,129 @@ function rule_proto_txt(s, ctHelpers) {
 		num: m[3] ? '0x%02X'.format(+m[3]) : null
 	} : null;
 
-	const familyItems = [];
+	const familyItems = (f && f !== 'any' && f !== '*') ? [hybridtool.renderCapsule('Family', f.toUpperCase())] : [];
+
 	const protoItems = [];
 	const icmpItems = [];
-	const matchItems = [];
-	const helperItems = [];
-
-	if (f && f !== 'any' && f !== '*') familyItems.push(hybridtool.renderCapsule('Family', f.toUpperCase()));
-
 	if (proto && proto.length) {
 		proto.forEach(p => {
 			protoItems.push(hybridtool.renderCapsule('Proto', p.name.toUpperCase()));
-			if (p.types && p.types.length) {
-				p.types.forEach(t => icmpItems.push(hybridtool.renderCapsule('ICMP', t)));
-			}
+			(p.types || []).forEach(t => icmpItems.push(hybridtool.renderCapsule('ICMP', t)));
 		});
 	} else {
 		protoItems.push(hybridtool.renderCapsule('Proto', _('Any')));
 	}
 
-	if (w) matchItems.push(hybridtool.renderMarkCapsule(w));
-	if (d) matchItems.push(hybridtool.renderCapsule('DSCP', (d.inv ? '! ' : '') + d.val));
-	if (h) helperItems.push(hybridtool.renderHelperCapsule(h));
+	const matchItems = [
+		w && hybridtool.renderMarkCapsule(w),
+		d && hybridtool.renderCapsule('DSCP', (d.inv ? '! ' : '') + d.val)
+	].filter(Boolean);
 
-	const children = [];
-	if (familyItems.length)
-		children.push(hybridtool.renderGroup('family-group', familyItems));
-	if (protoItems.length)
-		children.push(hybridtool.renderGroup('proto-group', protoItems));
-	if (icmpItems.length)
-		children.push(hybridtool.renderGroup('icmp-group', icmpItems));
-	if (matchItems.length)
-		children.push(hybridtool.renderGroup('match-group', matchItems));
-	if (helperItems.length)
-		children.push(hybridtool.renderGroup('helper-group', helperItems));
+	const helperItems = [
+		h && hybridtool.renderHelperCapsule(h)
+	].filter(Boolean);
 
-	if (!children.length)
-		return E('em', { style: 'color:#999;' }, _('Any Protocol'));
+	const children = [
+		familyItems.length && hybridtool.renderGroup('family-group', familyItems),
+		protoItems.length && hybridtool.renderGroup('proto-group', protoItems),
+		icmpItems.length && hybridtool.renderGroup('icmp-group', icmpItems),
+		matchItems.length && hybridtool.renderGroup('match-group', matchItems),
+		helperItems.length && hybridtool.renderGroup('helper-group', helperItems)
+	].filter(Boolean);
 
-	return E('div', { 'style': 'display:flex; flex-direction:column; gap:4px;' }, children);
+	return children.length ? E('div', { style: 'display:flex; flex-direction:column; gap:4px;' }, children) : E('em', { style: 'color:#999;' }, _('Any Protocol'));
 }
 
 function rule_src_txt(s, hosts) {
 	const z = uci.get('firewall', s, 'src');
-	const d = (uci.get('firewall', s, 'direction') == 'in') ? uci.get('firewall', s, 'device') : null;
+	const d = uci.get('firewall', s, 'direction') === 'in' ? uci.get('firewall', s, 'device') : null;
 
-	const baseItems = [];
+	const baseItems = [
+		hybridtool.renderZoneBadge(z),
+		d ? hybridtool.renderCapsule('IF', d) : null
+	].filter(Boolean);
+
 	const addrItems = [];
+	(fwtool.map_invert(uci.get('firewall', s, 'src_ip'), 'toLowerCase') || []).forEach(ip => {
+		addrItems.push(hybridtool.renderCapsule('IP', ip.ival, ip.inv));
+	});
 
-	baseItems.push(hybridtool.renderZoneBadge(z));
+	(fwtool.map_invert(uci.get('firewall', s, 'src_mac'), 'toUpperCase') || []).forEach(mac => {
+		addrItems.push(hybridtool.renderCapsule('MAC', mac.ival, mac.inv, hosts[mac.val]?.name));
+	});
 
-	if (d) baseItems.push(hybridtool.renderCapsule('IF', d));
+	(fwtool.map_invert(uci.get('firewall', s, 'src_port')) || []).forEach(p => {
+		addrItems.push(hybridtool.renderCapsule('Port', p.ival, p.inv));
+	});
 
-	const ips = fwtool.map_invert(uci.get('firewall', s, 'src_ip'), 'toLowerCase');
-	if (ips && ips.length) {
-		ips.forEach(ip => addrItems.push(hybridtool.renderCapsule('IP', ip.ival, ip.inv)));
-	}
+	const children = [
+		baseItems.length && hybridtool.renderGroup('base-group', baseItems, true),
+		addrItems.length && hybridtool.renderGroup('addr-group', addrItems)
+	].filter(Boolean);
 
-	const macs = fwtool.map_invert(uci.get('firewall', s, 'src_mac'), 'toUpperCase');
-	if (macs && macs.length) {
-		macs.forEach(mac => {
-			const hint = hosts[mac.val] ? hosts[mac.val].name : null;
-			addrItems.push(hybridtool.renderCapsule('MAC', mac.ival, mac.inv, hint));
-		});
-	}
-
-	const ports = fwtool.map_invert(uci.get('firewall', s, 'src_port'));
-	if (ports && ports.length) {
-		ports.forEach(p => addrItems.push(hybridtool.renderCapsule('Port', p.ival, p.inv)));
-	}
-
-	const children = [];
-	if (baseItems.length)
-		children.push(hybridtool.renderGroup('base-group', baseItems, true));
-	if (addrItems.length)
-		children.push(hybridtool.renderGroup('addr-group', addrItems));
-
-	return E('div', { 'style': 'display:flex; flex-direction:column; gap:4px;' }, children);
+	return E('div', { style: 'display:flex; flex-direction:column; gap:4px;' }, children);
 }
 
 function rule_dest_txt(s) {
 	const z = uci.get('firewall', s, 'dest');
-	const d = (uci.get('firewall', s, 'direction') == 'out') ? uci.get('firewall', s, 'device') : null;
+	const d = uci.get('firewall', s, 'direction') === 'out' ? uci.get('firewall', s, 'device') : null;
 
-	const baseItems = [];
-	const addrItems = [];
-
-	baseItems.push(hybridtool.renderZoneBadge(z));
-
+	const baseItems = [hybridtool.renderZoneBadge(z)];
 	if (d) baseItems.push(hybridtool.renderCapsule('IF', d));
 
-	const ips = fwtool.map_invert(uci.get('firewall', s, 'dest_ip'), 'toLowerCase');
-	if (ips && ips.length) {
-		ips.forEach(ip => addrItems.push(hybridtool.renderCapsule('IP', ip.ival, ip.inv)));
-	}
+	const addrItems = [];
+	(fwtool.map_invert(uci.get('firewall', s, 'dest_ip'), 'toLowerCase') || []).forEach(ip => {
+		addrItems.push(hybridtool.renderCapsule('IP', ip.ival, ip.inv));
+	});
 
-	const ports = fwtool.map_invert(uci.get('firewall', s, 'dest_port'));
-	if (ports && ports.length) {
-		ports.forEach(p => addrItems.push(hybridtool.renderCapsule('Port', p.ival, p.inv)));
-	}
+	(fwtool.map_invert(uci.get('firewall', s, 'dest_port')) || []).forEach(p => {
+		addrItems.push(hybridtool.renderCapsule('Port', p.ival, p.inv));
+	});
 
-	const children = [];
-	if (baseItems.length)
-		children.push(hybridtool.renderGroup('base-group', baseItems, true));
-	if (addrItems.length)
-		children.push(hybridtool.renderGroup('addr-group', addrItems));
+	const children = [
+		baseItems.length && hybridtool.renderGroup('base-group', baseItems, true),
+		addrItems.length && hybridtool.renderGroup('addr-group', addrItems)
+	].filter(Boolean);
 
-	return E('div', { 'style': 'display:flex; flex-direction:column; gap:4px;' }, children);
+	return E('div', { style: 'display:flex; flex-direction:column; gap:4px;' }, children);
 }
 
 function rule_target_txt(sid, ctHelpers) {
 	const t = uci.get('firewall', sid, 'target');
 	const h = (uci.get('firewall', sid, 'set_helper') || '').toUpperCase();
-	const helper_name = (ctHelpers.filter(function (ctH) { return ctH.name.toUpperCase() == h })[0] || {}).description;
+	const helper_name = ctHelpers.find(ctH => ctH.name.toUpperCase() === h)?.description;
 
-	let style = '';
+	let style = 'background:rgba(23,162,184,0.15); color:#17a2b8; border-color:rgba(23,162,184,0.25);';
 	let val = t;
 	let details = '';
 
 	if (t === 'ACCEPT') {
 		style = 'background:rgba(40,167,69,0.15); color:#28a745; border-color:rgba(40,167,69,0.25);';
 		val = _('Accept');
-	} else if (t === 'DROP') {
+	} else if (t === 'DROP' || t === 'REJECT') {
 		style = 'background:rgba(220,53,69,0.15); color:#dc3545; border-color:rgba(220,53,69,0.25);';
-		val = _('Drop');
-	} else if (t === 'REJECT') {
-		style = 'background:rgba(220,53,69,0.15); color:#dc3545; border-color:rgba(220,53,69,0.25);';
-		val = _('Reject');
+		val = t === 'DROP' ? _('Drop') : _('Reject');
 	} else if (t === 'NOTRACK') {
-		style = 'background:rgba(23,162,184,0.15); color:#17a2b8; border-color:rgba(23,162,184,0.25);';
 		val = _("Don't track");
 	} else if (t === 'HELPER') {
-		style = 'background:rgba(23,162,184,0.15); color:#17a2b8; border-color:rgba(23,162,184,0.25);';
 		val = _('Assign Helper');
 		details = helper_name || h;
 	} else if (t === 'MARK') {
-		style = 'background:rgba(23,162,184,0.15); color:#17a2b8; border-color:rgba(23,162,184,0.25);';
 		const set_mark = uci.get('firewall', sid, 'set_mark');
-		const set_xmark = uci.get('firewall', sid, 'set_xmark');
 		val = set_mark ? _('Assign Mark') : _('XOR Mark');
-		details = set_mark || set_xmark;
+		details = set_mark || uci.get('firewall', sid, 'set_xmark');
 	} else if (t === 'DSCP') {
-		style = 'background:rgba(23,162,184,0.15); color:#17a2b8; border-color:rgba(23,162,184,0.25);';
 		val = _('Assign DSCP');
 		details = uci.get('firewall', sid, 'set_dscp');
 	} else if (t) {
 		val = t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+		style = '';
 	} else {
 		val = _('Unspecified');
+		style = '';
 	}
 
-	const displayVal = details ? '%s (%s)'.format(val, details) : val;
-
-	return hybridtool.renderCapsule(_('Action'), displayVal, false, null, null, style);
+	return hybridtool.renderCapsule(_('Action'), details ? `${val} (${details})` : val, false, null, null, style);
 }
 
 
@@ -257,16 +228,14 @@ return view.extend({
 			oProto.modalonly = false;
 			oProto.textvalue = function (sid) {
 				const proto = rule_proto_txt(sid, ctHelpers);
-				if (!proto) return '';
-				return E('div', { 'style': 'font-size: 0.95em;' }, proto);
+				return proto ? E('div', { style: 'font-size: 0.95em;' }, proto) : '';
 			};
 
 			const oSrc = s.option(form.DummyValue, '_src', _('Source'));
 			oSrc.modalonly = false;
 			oSrc.textvalue = function (sid) {
 				const src = rule_src_txt(sid, hosts);
-				if (!src) return '';
-				return E('div', { 'style': 'font-size: 0.95em;' }, src);
+				return src ? E('div', { style: 'font-size: 0.95em;' }, src) : '';
 			};
 
 			const oDest = s.option(form.DummyValue, '_dest', _('Destination'));
@@ -276,13 +245,13 @@ return view.extend({
 				const limit = hybridtool.rule_limit_txt(sid, 'text');
 				const ipset = uci.get('firewall', sid, 'ipset');
 
-				const items = [];
-				if (dest) items.push(E('div', { 'style': 'padding: 2px 0;' }, dest));
-				if (ipset) items.push(hybridtool.renderCapsule('IPSet', ipset));
-				if (limit) items.push(E('div', { 'style': 'padding: 2px 0;' }, limit));
+				const items = [
+					dest && E('div', { style: 'padding: 2px 0;' }, dest),
+					ipset && hybridtool.renderCapsule('IPSet', ipset),
+					limit && E('div', { style: 'padding: 2px 0;' }, limit)
+				].filter(Boolean);
 
-				if (items.length === 0) return '';
-				return E('div', { 'style': 'font-size: 0.95em;' }, items);
+				return items.length ? E('div', { style: 'font-size: 0.95em;' }, items) : '';
 			};
 
 			const oTarget = s.option(form.ListValue, '_target', _('Action'));
@@ -290,13 +259,9 @@ return view.extend({
 			oTarget.textvalue = function (sid) {
 				const targetCapsule = rule_target_txt(sid, ctHelpers);
 				const timeCapsule = hybridtool.rule_time_txt(sid);
-				if (timeCapsule) {
-					return E('div', { 'style': 'display:flex; flex-direction:column; gap:4px; align-items:flex-start;' }, [
-						targetCapsule,
-						timeCapsule
-					]);
-				}
-				return targetCapsule;
+				return timeCapsule
+					? E('div', { style: 'display:flex; flex-direction:column; gap:4px; align-items:flex-start;' }, [targetCapsule, timeCapsule])
+					: targetCapsule;
 			};
 
 			const oEnabled = s.option(form.Flag, 'enabled', _('Enable'));
@@ -493,21 +458,16 @@ return view.extend({
 			o.modalonly = true;
 			o.placeholder = _('any');
 			o.depends('target', 'HELPER');
-			for (let cth of ctHelpers)
-				o.value(cth.name, '%s (%s)'.format(cth.description, cth.name.toUpperCase()));
+			ctHelpers.forEach(cth => o.value(cth.name, '%s (%s)'.format(cth.description, cth.name.toUpperCase())));
 
 			o = s.taboption('advanced', form.Value, 'helper', _('Match helper'), _('Match traffic using the specified connection tracking helper.'));
 			o.modalonly = true;
 			o.placeholder = _('any');
-			for (let cth of ctHelpers)
-				o.value(cth.name, '%s (%s)'.format(cth.description, cth.name.toUpperCase()));
+			ctHelpers.forEach(cth => o.value(cth.name, '%s (%s)'.format(cth.description, cth.name.toUpperCase())));
 			o.validate = function (section_id, value) {
-				if (value == '' || value == null)
-					return true;
-				value = value.replace(/^!\s*/, '');
-				for (let cth of ctHelpers)
-					if (value == cth.name)
-						return true;
+				if (value === '' || value == null) return true;
+				const cleanVal = value.replace(/^!\s*/, '');
+				if (ctHelpers.some(cth => cleanVal === cth.name)) return true;
 				return _('Unknown or not installed conntrack helper "%s"').format(value);
 			};
 
@@ -549,65 +509,59 @@ return view.extend({
 			};
 		};
 
-		// Block 1
-		createSection(_('Device Management (Input: %s / Output: %s)').format(defInput, defOutput), function (sid) {
-			const s_src = uci.get('firewall', sid, 'src');
-			const s_dest = uci.get('firewall', sid, 'dest');
-			const p_src = (s_src === undefined || s_src === '') ? '' : s_src;
-			const p_dest = (s_dest === undefined || s_dest === '') ? '' : s_dest;
-			return (p_src === '' || p_dest === '') && uci.get('firewall', sid, 'target') != 'SNAT';
-		}, function (ev) {
+		const getSrcDest = sid => [uci.get('firewall', sid, 'src') || '', uci.get('firewall', sid, 'dest') || ''];
+
+		const addRuleSection = (src, dest, hb) => function (ev) {
 			const config_name = this.uciconfig || this.map.config;
 			const section_id = uci.add(config_name, this.sectiontype);
-			uci.set(config_name, section_id, 'src', '*');
-			uci.set(config_name, section_id, 'dest', '');
+			uci.set(config_name, section_id, 'src', src);
+			uci.set(config_name, section_id, 'dest', dest);
+			if (hb !== undefined) uci.set(config_name, section_id, '_hybrid_block', hb);
 			this.map.addedSection = section_id;
 			this.renderMoreOptionsModal(section_id);
-		}, true);
+		};
+
+		// Block 1
+		createSection(_('Device Management (Input: %s / Output: %s)').format(defInput, defOutput),
+			sid => {
+				const [src, dest] = getSrcDest(sid);
+				return (src === '' || dest === '') && uci.get('firewall', sid, 'target') !== 'SNAT';
+			},
+			addRuleSection('*', ''), true);
 
 		// Block 2
-		createSection(_('Global Pre-Rules'), function (sid) {
-			const s_src = uci.get('firewall', sid, 'src');
-			const s_dest = uci.get('firewall', sid, 'dest');
-			const p_src = (s_src === undefined || s_src === '') ? '' : s_src;
-			const p_dest = (s_dest === undefined || s_dest === '') ? '' : s_dest;
-			const hb = uci.get('firewall', sid, '_hybrid_block');
-			return p_src === '*' && p_dest !== '' && hb !== 'post' && uci.get('firewall', sid, 'target') != 'SNAT';
-		}, function (ev) {
-			const config_name = this.uciconfig || this.map.config;
-			const section_id = uci.add(config_name, this.sectiontype);
-			uci.set(config_name, section_id, 'src', '*');
-			uci.set(config_name, section_id, 'dest', '*');
-			uci.set(config_name, section_id, '_hybrid_block', '');
-			this.map.addedSection = section_id;
-			this.renderMoreOptionsModal(section_id);
-		}, true);
+		createSection(_('Global Pre-Rules'),
+			sid => {
+				const [src, dest] = getSrcDest(sid);
+				return src === '*' && dest !== '' && uci.get('firewall', sid, '_hybrid_block') !== 'post' && uci.get('firewall', sid, 'target') !== 'SNAT';
+			},
+			addRuleSection('*', '*', ''), true);
 
 		// Block 3 Header
 		const h3 = m.section(form.TypedSection, 'rule', _('Zone-specific Forwarding Rules'));
 		h3.anonymous = true;
 		h3.render = function () {
-			return E('div', { 'style': 'margin-top: 1.5em; border-bottom: 2px solid #ccc; padding-bottom: 0.3em; display: flex; justify-content: space-between; align-items: center;' }, [
-				E('h3', { 'style': 'margin: 0;' }, [this.title]),
+			return E('div', { style: 'margin-top: 1.5em; border-bottom: 2px solid #ccc; padding-bottom: 0.3em; display: flex; justify-content: space-between; align-items: center;' }, [
+				E('h3', { style: 'margin: 0;' }, [this.title]),
 				E('button', {
-					'class': 'btn cbi-button-add',
-					'click': ui.createHandlerFn(this, function (ev) {
-						const select = E('select', { 'class': 'cbi-input-select' },
-							zones.map(z => E('option', { 'value': z.name }, [z.name]))
+					class: 'btn cbi-button-add',
+					click: ui.createHandlerFn(this, function () {
+						const select = E('select', { class: 'cbi-input-select' },
+							zones.map(z => E('option', { value: z.name }, [z.name]))
 						);
 
 						ui.showModal(_('Add Rule to Zone'), [
 							E('p', _('Select the source zone for the new rule:')),
-							E('div', { 'style': 'margin: 1em 0;' }, [select]),
-							E('div', { 'class': 'right' }, [
+							E('div', { style: 'margin: 1em 0;' }, [select]),
+							E('div', { class: 'right' }, [
 								E('button', {
-									'class': 'btn cbi-button-neutral',
-									'style': 'margin-right: 0.5em;',
-									'click': function () { ui.hideModal(); }
+									class: 'btn cbi-button-neutral',
+									style: 'margin-right: 0.5em;',
+									click: () => ui.hideModal()
 								}, [_('Cancel')]),
 								E('button', {
-									'class': 'btn cbi-button-action important',
-									'click': ui.createHandlerFn(this, function () {
+									class: 'btn cbi-button-action important',
+									click: ui.createHandlerFn(this, function () {
 										const chosenZone = select.value;
 										ui.hideModal();
 										if (!chosenZone) return;
@@ -638,11 +592,8 @@ return view.extend({
 			const zp = zoneMap[srcZone] || { input: 'REJECT', forward: 'REJECT' };
 			const title = _('Source Zone: %s [Input: %s] [Forward: %s]').format(srcZone, zp.input, zp.forward);
 			createSection(title, function (sid) {
-				const s_src = uci.get('firewall', sid, 'src');
-				const s_dest = uci.get('firewall', sid, 'dest');
-				const p_src = (s_src === undefined || s_src === '') ? '' : s_src;
-				const p_dest = (s_dest === undefined || s_dest === '') ? '' : s_dest;
-				return p_src === srcZone && p_dest !== '' && uci.get('firewall', sid, 'target') != 'SNAT';
+				const [src, dest] = getSrcDest(sid);
+				return src === srcZone && dest !== '' && uci.get('firewall', sid, 'target') != 'SNAT';
 			}, function (ev) {
 				const config_name = this.uciconfig || this.map.config;
 				const section_id = uci.add(config_name, this.sectiontype);
@@ -657,35 +608,23 @@ return view.extend({
 		const h4 = m.section(form.TypedSection, 'rule', _('Global Post-Rules'));
 		h4.anonymous = true;
 		h4.render = function () {
-			return E('h3', { 'style': 'margin-top: 2em; border-bottom: 2px solid #ccc; padding-bottom: 0.3em;' }, [this.title]);
+			return E('h3', { style: 'margin-top: 2em; border-bottom: 2px solid #ccc; padding-bottom: 0.3em;' }, [this.title]);
 		};
 		h4.filter = function () { return false; };
 
 		// Block 4
-		createSection(_('Global Post-Rules (Bottom of Forward Chain)'), function (sid) {
-			const s_src = uci.get('firewall', sid, 'src');
-			const s_dest = uci.get('firewall', sid, 'dest');
-			const p_src = (s_src === undefined || s_src === '') ? '' : s_src;
-			const p_dest = (s_dest === undefined || s_dest === '') ? '' : s_dest;
-			const hb = uci.get('firewall', sid, '_hybrid_block');
-			return p_src === '*' && p_dest !== '' && hb === 'post' && uci.get('firewall', sid, 'target') != 'SNAT';
-		}, function (ev) {
-			const config_name = this.uciconfig || this.map.config;
-			const section_id = uci.add(config_name, this.sectiontype);
-			uci.set(config_name, section_id, 'src', '*');
-			uci.set(config_name, section_id, 'dest', '*');
-			uci.set(config_name, section_id, '_hybrid_block', 'post');
-			this.map.addedSection = section_id;
-			this.renderMoreOptionsModal(section_id);
-		}, true);
+		createSection(_('Global Post-Rules (Bottom of Forward Chain)'),
+			sid => {
+				const [src, dest] = getSrcDest(sid);
+				return src === '*' && dest !== '' && uci.get('firewall', sid, '_hybrid_block') === 'post' && uci.get('firewall', sid, 'target') !== 'SNAT';
+			},
+			addRuleSection('*', '*', 'post'), true);
 
-		return m.render().then(mapDom => {
-			return E('div', { 'class': 'cbi-map' }, [
-				E('h2', {}, [_('Traffic Rules (Hybrid View)')]),
-				E('div', { 'class': 'cbi-map-descr' }, [_('Grouped by source zone. Blocks are collapsible.')]),
-				searchInput,
-				mapDom
-			]);
-		});
+		return m.render().then(mapDom => E('div', { class: 'cbi-map' }, [
+			E('h2', {}, [_('Traffic Rules (Hybrid View)')]),
+			E('div', { class: 'cbi-map-descr' }, [_('Grouped by source zone. Blocks are collapsible.')]),
+			searchInput,
+			mapDom
+		]));
 	}
 });
