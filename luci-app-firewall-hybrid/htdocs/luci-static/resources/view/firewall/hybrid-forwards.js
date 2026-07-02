@@ -158,7 +158,6 @@ return view.extend({
 
 	renderForwards([hosts, ctHelpers, devs]) {
 		const m = new form.Map('firewall', null, null);
-		const fw4 = L.hasSystemFeature('firewall4');
 
 		hybridtool.setupSaveHook(m, 'redirect');
 
@@ -189,26 +188,24 @@ return view.extend({
 			oName.placeholder = _('Unnamed forward');
 			oName.modalonly = true;
 
-			if (fw4) {
-				const oFamily = s.taboption('general', form.ListValue, 'family', _('Restrict to address family'));
-				oFamily.modalonly = true;
-				oFamily.rmempty = true;
-				oFamily.value('any', _('IPv4 and IPv6'));
-				oFamily.value('ipv4', _('IPv4 only'));
-				oFamily.value('ipv6', _('IPv6 only'));
-				oFamily.value('', _('automatic'));
-				oFamily.cfgvalue = function (section_id) {
-					const val = this.map.data.get(this.map.config, section_id, 'family');
-					if (!val) return '';
-					if (val === 'any' || val === 'all' || val === '*') return 'any';
-					if (val === 'inet' || String(val).includes('4')) return 'ipv4';
-					if (String(val).includes('6')) return 'ipv6';
-				};
-				oFamily.validate = function (section_id, value) {
-					fwtool.updateHostHints(this.map, section_id, 'dest_ip', value, hosts);
-					return !fw4 ? true : validate_opt_family(this, section_id, 'family');
-				};
-			}
+			const oFamily = s.taboption('general', form.ListValue, 'family', _('Restrict to address family'));
+			oFamily.modalonly = true;
+			oFamily.rmempty = true;
+			oFamily.value('any', _('IPv4 and IPv6'));
+			oFamily.value('ipv4', _('IPv4 only'));
+			oFamily.value('ipv6', _('IPv6 only'));
+			oFamily.value('', _('automatic'));
+			oFamily.cfgvalue = function (section_id) {
+				const val = this.map.data.get(this.map.config, section_id, 'family');
+				if (!val) return '';
+				if (val === 'any' || val === 'all' || val === '*') return 'any';
+				if (val === 'inet' || String(val).includes('4')) return 'ipv4';
+				if (String(val).includes('6')) return 'ipv6';
+			};
+			oFamily.validate = function (section_id, value) {
+				fwtool.updateHostHints(this.map, section_id, 'dest_ip', value, hosts);
+				return validate_opt_family(this, section_id, 'family');
+			};
 
 			// Hybrid separated columns
 			const oProto = s.option(form.DummyValue, '_proto', _('Protocol'));
@@ -277,11 +274,11 @@ return view.extend({
 				o.datatype = 'list(neg(macaddr))';
 			}
 
-			fwtool.addIPOption(s, 'advanced', 'src_ip', _('Source IP address'), _('Only match incoming traffic from this IP or range.'), !fw4 ? 'ipv4' : '', hosts);
+			fwtool.addIPOption(s, 'advanced', 'src_ip', _('Source IP address'), _('Only match incoming traffic from this IP or range.'), '', hosts);
 			o = s.getOption ? s.getOption('src_ip') : null;
 			if (o) {
 				o.rmempty = true;
-				o.datatype = !fw4 ? 'neg(ipmask4("true"))' : 'neg(ipmask("true"))';
+				o.datatype = 'neg(ipmask("true"))';
 			}
 
 			o = s.taboption('advanced', form.Value, 'src_port', _('Source port'), _('Only match incoming traffic originating from the given source port or port range on the client host'));
@@ -295,7 +292,7 @@ return view.extend({
 			fwtool.addLocalIPOption(s, 'advanced', 'src_dip', _('External IP address'), _('Only match incoming traffic directed at the given IP address.'), devs);
 			o = s.getOption ? s.getOption('src_dip') : null;
 			if (o) {
-				o.datatype = !fw4 ? 'neg(ipmask4("true"))' : 'neg(ipmask("true"))';
+				o.datatype = 'neg(ipmask("true"))';
 				o.rmempty = true;
 			}
 
@@ -311,11 +308,11 @@ return view.extend({
 			o.rmempty = true;
 			o.nocreate = true;
 
-			fwtool.addIPOption(s, 'general', 'dest_ip', _('Internal IP address'), _('Redirect matched incoming traffic to the specified internal host'), !fw4 ? 'ipv4' : '', hosts);
+			fwtool.addIPOption(s, 'general', 'dest_ip', _('Internal IP address'), _('Redirect matched incoming traffic to the specified internal host'), '', hosts);
 			o = s.getOption ? s.getOption('dest_ip') : null;
 			if (o) {
 				o.rmempty = true;
-				o.datatype = !fw4 ? 'ipmask4' : 'ipmask';
+				o.datatype = 'ipmask';
 			}
 
 			o = s.taboption('general', form.Value, 'dest_port', _('Internal port'), _('Redirect matched incoming traffic to the given port on the internal host'));
@@ -369,11 +366,7 @@ return view.extend({
 			o.placeholder = '10/minute';
 			o.modalonly = true;
 
-			if (!L.hasSystemFeature('firewall4')) {
-				o = s.taboption('advanced', form.Value, 'extra', _('Extra arguments'), _('Passes additional arguments to iptables. Use with care!'));
-				o.modalonly = true;
-				o.rmempty = true;
-			}
+
 
 			s.render = function () {
 				return form.GridSection.prototype.render.apply(this, arguments).then(node => {

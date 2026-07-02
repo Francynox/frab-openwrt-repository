@@ -488,11 +488,7 @@ return view.extend({
 			o.placeholder = '10/minute';
 			o.modalonly = true;
 
-			if (!L.hasSystemFeature('firewall4')) {
-				o = s.taboption('advanced', form.Value, 'extra', _('Extra arguments'),
-					_('Passes additional arguments to iptables. Use with care!'));
-				o.modalonly = true;
-			}
+
 
 			o = s.taboption('advanced', form.ListValue, '_hybrid_block', _('Global Rule Position'), _('Determines if this global rule evaluates before or after zone rules.'));
 			o.value('', _('PRE-Global (Evaluates Top)'));
