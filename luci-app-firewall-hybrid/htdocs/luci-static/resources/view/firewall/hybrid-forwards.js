@@ -4,7 +4,6 @@
 'require rpc';
 'require uci';
 'require form';
-'require dom';
 'require tools.firewall as fwtool';
 'require tools.widgets as widgets';
 'require tools.firewall-hybrid as hybridtool';
@@ -310,6 +309,9 @@ return view.extend({
 			if (o) {
 				o.rmempty = true;
 				o.datatype = 'ipmask';
+				o.validate = function (section_id, value) {
+					return validate_opt_family(this, section_id, 'dest_ip');
+				};
 			}
 
 			o = s.taboption('general', form.Value, 'dest_port', _('Internal port'), _('Redirect matched incoming traffic to the given port on the internal host'));

@@ -4,7 +4,6 @@
 'require rpc';
 'require uci';
 'require form';
-'require dom';
 'require tools.firewall as fwtool';
 'require tools.widgets as widgets';
 'require tools.firewall-hybrid as hybridtool';

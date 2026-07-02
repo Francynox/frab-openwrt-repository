@@ -1,10 +1,7 @@
 'use strict';
-/* global hybridtool */
 'require view';
 'require uci';
 'require form';
-'require firewall';
-'require tools.firewall as fwtool';
 'require tools.firewall-hybrid as hybridtool';
 
 
