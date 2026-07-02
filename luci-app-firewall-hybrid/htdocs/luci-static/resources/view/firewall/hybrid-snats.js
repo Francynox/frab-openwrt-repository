@@ -154,10 +154,7 @@ return view.extend({
 	},
 
 	render(data) {
-		if (fwtool.checkLegacySNAT())
-			return fwtool.renderMigration();
-		else
-			return this.renderNats(data);
+		return this.renderNats(data);
 	},
 
 	renderNats([hosts, devs]) {

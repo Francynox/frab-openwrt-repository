@@ -150,10 +150,7 @@ return view.extend({
 	},
 
 	render(data) {
-		if (fwtool.checkLegacySNAT())
-			return fwtool.renderMigration();
-		else
-			return this.renderForwards(data);
+		return this.renderForwards(data);
 	},
 
 	renderForwards([hosts, ctHelpers, devs]) {
