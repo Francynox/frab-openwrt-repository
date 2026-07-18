@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        arch: [x86_64-25.12.4]
+        arch: [x86_64-25.12.4, x86_64-25.12.5]
     steps:
       - uses: actions/checkout@v7
 
