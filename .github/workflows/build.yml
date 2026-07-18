@@ -1,6 +1,15 @@
 name: Build APK
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+    paths: &shared_paths
+      - "packages/**"
+      - ".github/**"
+      - "frab_openwrt.pub"
+  pull_request:
+    branches: [main]
+    paths: *shared_paths
 
 jobs:
   build:
